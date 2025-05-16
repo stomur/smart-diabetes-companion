@@ -1,40 +1,38 @@
-"""Smart Diabetes Companion – Complete App (Photo Background, Bug‑Free)
-Author: ChatGPT & Dr. Shikhar Tomur
-Last build: 2025‑05‑15
-DESCRIPTION
-‾‾‾‾‾‾‾‾‾‾‾
-• Glucose tracker with hypo alert & insulin correction demo
-• Dallas CVS cash‑price explorer (mock data)
-• NEJM evidence tab
-• Aesthetic: blurred photo background + translucent cards
-DISCLAIMER
-‾‾‾‾‾‾‾‾‾‾‾
-Educational demo only – not individualized medical advice.
+
+"""
+Smart Diabetes Companion – Final Demo
+Features:
+  • Glucose tracker
+  • Dallas CVS price finder
+  • Static Google Maps thumbnails (Static Maps API)
+  • Insulin options table
+  • NEJM highlights
+Set GOOGLE_STATIC_KEY in Streamlit Secrets.
 """
 
 import streamlit as st
 import pandas as pd
 from contextlib import contextmanager
 
-# ----------------- Global Style -----------------
-PHOTO_BG = "https://images.unsplash.com/photo-1580281657441-8236aa7f2930?auto=format&fit=crop&w=1950&q=80"
+# ---------- Config & Styles ----------
+st.set_page_config(page_title="Smart Diabetes Companion", page_icon="💉", layout="centered")
 
-st.set_page_config(page_title="Smart Diabetes Companion", layout="centered")
-st.markdown(f"""
-<style>
+BG_URL = "https://images.unsplash.com/photo-1580281657441-8236aa7f2930?auto=format&fit=crop&w=1950&q=80"
+
+css = """<style>
 html, body, .stApp {{
-  background-image: url('{PHOTO_BG}');
+  background-image: url('{bg}');
   background-size: cover;
   background-attachment: fixed;
 }}
 .card {{
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.9);
   padding: 2rem;
   border-radius: 1.25rem;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.1);
 }}
-</style>
-""", unsafe_allow_html=True)
+</style>""".format(bg=BG_URL)
+st.markdown(css, unsafe_allow_html=True)
 
 @contextmanager
 def card():
@@ -42,118 +40,99 @@ def card():
     yield
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ----------------- Header -----------------
+# ---------- Header ----------
 with card():
-    col_logo, col_title = st.columns([1,6])
-    with col_logo:
-        st.image("https://images.unsplash.com/photo-1526256262350-7da7584cf5eb?auto=format&fit=crop&w=200&q=60", width=80)
-    with col_title:
-        st.title("Smart Diabetes Companion")
-        st.caption("Glucose • Insulin math • CVS prices • NEJM evidence")
+    st.image("https://images.unsplash.com/photo-1526256262350-7da7584cf5eb?auto=format&fit=crop&w=200&q=60", width=70)
+    st.title("Smart Diabetes Companion")
+    st.caption("Glucose • CVS pricing • Maps • Insulin guide • NEJM evidence")
 
-# ----------------- Sidebar -----------------
-st.sidebar.header("Targets & Settings")
-target_bg = st.sidebar.number_input("Target BG (mg/dL)", value=120, step=5)
-isf = st.sidebar.number_input("Insulin Sensitivity (mg/dL per unit)", value=50)
-user_zip = st.sidebar.text_input("ZIP code (Dallas)", value="75201")
+# ---------- Sidebar ----------
+st.sidebar.header("Targets")
+target = st.sidebar.number_input("Target BG", 120, step=5)
+isf    = st.sidebar.number_input("ISF (mg/dL per unit)", 50)
+user_zip = st.sidebar.text_input("ZIP (Dallas)", "75201")
 
-# ----------------- Tabs -----------------
-tab_glu, tab_cvs, tab_nejm = st.tabs(["📈 Glucose Tracker", "💊 CVS Prices", "📚 NEJM Insights"])
+# ---------- Data ----------
+def cvs_data():
+    return pd.DataFrame([
+        {"zip":75201,"store":"CVS – Downtown","med":"insulin glargine (Lantus)","price":92,"lat":32.7791,"lon":-96.7989},
+        {"zip":75205,"store":"CVS – Knox","med":"insulin glargine (Lantus)","price":95,"lat":32.8212,"lon":-96.7879},
+        {"zip":75230,"store":"CVS – Preston","med":"insulin glargine (Lantus)","price":98,"lat":32.8637,"lon":-96.8070},
+        {"zip":75201,"store":"CVS – Downtown","med":"metformin","price":6,"lat":32.7791,"lon":-96.7989},
+        {"zip":75205,"store":"CVS – Knox","med":"metformin","price":7,"lat":32.8212,"lon":-96.7879},
+        {"zip":75230,"store":"CVS – Preston","med":"metformin","price":8,"lat":32.8637,"lon":-96.8070},
+    ])
 
-# ----------------- Glucose Tracker Tab -----------------
-with tab_glu:
+df_prices = cvs_data()
+maps_key  = st.secrets.get("GOOGLE_STATIC_KEY", "YOUR_API_KEY")
+
+# ---------- Tabs ----------
+tab_g, tab_p, tab_m, tab_i, tab_n = st.tabs(
+    ["📈 Glucose", "💊 CVS Prices", "📍 CVS Maps", "🩺 Insulin Guide", "📚 NEJM"])
+
+# ---------- Glucose tab ----------
+with tab_g:
     with card():
-        st.header("Upload CGM / Glucometer CSV")
-        sample_csv = "timestamp,glucose\n2025-05-15 08:00,58\n2025-05-15 08:30,92"
-        st.download_button("Sample CSV", sample_csv, "sample.csv", "text/csv")
-        file = st.file_uploader("CSV with columns: timestamp,glucose", type="csv")
+        st.header("CGM / Glucometer CSV")
+        sample = "timestamp,glucose\n2025-05-15 08:00,58\n2025-05-15 08:30,92"
+        st.download_button("Sample CSV", sample, file_name="sample.csv", mime="text/csv")
+        file = st.file_uploader("Upload CSV", type="csv")
         if file:
-            try:
-                df = pd.read_csv(file)
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df = df.sort_values('timestamp')
+            df = pd.read_csv(file)
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            df = df.dropna().sort_values('timestamp')
+            st.line_chart(df.set_index('timestamp')['glucose'])
 
-                latest_row = df.iloc[-1]
-                latest_glu = latest_row['glucose']
-                avg_glu = df['glucose'].mean()
-                delta = latest_glu - df['glucose'].iloc[-2] if len(df) > 1 else 0
-
-                c1, c2 = st.columns(2)
-                c1.metric("Average", f"{avg_glu:.1f} mg/dL")
-                c2.metric("Latest", f"{int(latest_glu)} mg/dL", delta=int(delta))
-
-                st.line_chart(df.set_index('timestamp')['glucose'])
-
-                # Clinical logic
-                if latest_glu < 70:
-                    st.error(f"⚠️ Low BG: {latest_glu} mg/dL")
-                    st.info("Treat with 15 g fast carbs → re‑check in 15 min. Repeat if needed; seek help if persistent.")
-                    st.stop()
-
-                if latest_glu > target_bg:
-                    if latest_glu <= 180:
-                        tier, mult = "Low correction", 0.5
-                    elif latest_glu <= 250:
-                        tier, mult = "Standard correction", 1.0
-                    else:
-                        tier, mult = "High correction – monitor ketones", 1.2
-                    dose = max(0, round(((latest_glu - target_bg) / isf) * mult, 1))
-                    st.success(f"💉 {tier}: {dose} units rapid‑acting insulin (demo)")
-                    st.markdown("> *Evidence*: Closed‑loop pumps ↑ time‑in‑range by 15 pp (NEJM 2025).")
-                else:
-                    st.success("✅ BG within target – no correction insulin.")
-
-            except Exception as e:
-                st.error(f"CSV parse error: {e}")
-
-# ----------------- CVS Price Tab -----------------
-with tab_cvs:
+# ---------- CVS Prices tab ----------
+with tab_p:
     with card():
-        st.header("Dallas CVS Cash Prices (Mock)")
-        # mock data list
-        prices = [
-            {"zip": 75201, "store": "CVS – Downtown", "med": "insulin glargine (Lantus)", "price": 92},
-            {"zip": 75205, "store": "CVS – Knox", "med": "insulin glargine (Lantus)", "price": 95},
-            {"zip": 75230, "store": "CVS – Preston", "med": "insulin glargine (Lantus)", "price": 98},
-            {"zip": 75201, "store": "CVS – Downtown", "med": "metformin", "price": 6},
-            {"zip": 75205, "store": "CVS – Knox", "med": "metformin", "price": 7},
-            {"zip": 75230, "store": "CVS – Preston", "med": "metformin", "price": 8},
-            {"zip": 75201, "store": "CVS – Downtown", "med": "semaglutide (Ozempic)", "price": 702},
-            {"zip": 75205, "store": "CVS – Knox", "med": "semaglutide (Ozempic)", "price": 709},
-            {"zip": 75230, "store": "CVS – Preston", "med": "semaglutide (Ozempic)", "price": 719},
-        ]
-        df_prices = pd.DataFrame(prices)
-        med_choice = st.selectbox("Select medication", df_prices['med'].unique())
-        if st.button("Find cheapest CVS"):
-            try:
-                zip_int = int(user_zip)
-            except ValueError:
+        st.header("Find Cheapest CVS")
+        med = st.selectbox("Medication", df_prices['med'].unique())
+        if st.button("Search"):
+            if not user_zip.isnumeric():
                 st.error("ZIP must be numeric")
-                st.stop()
+            else:
+                z = int(user_zip)
+                sub = df_prices[df_prices['med']==med]
+                local = sub[sub['zip']==z]
+                res = local if not local.empty else sub
+                res = res.sort_values('price')
+                st.table(res[['store','price']])
+                st.success(f"Cheapest: {res.iloc[0]['store']} – ${res.iloc[0]['price']}")
 
-            med_df = df_prices[df_prices['med'] == med_choice]
-            local_df = med_df[med_df['zip'] == zip_int]
-            subset = local_df if not local_df.empty else med_df
-            subset = subset.sort_values('price')
-
-            st.dataframe(subset[['store', 'price']].rename(columns={'store': 'CVS Store', 'price': 'Cash Price ($)'}), use_container_width=True)
-            best = subset.iloc[0]
-            st.success(f"Cheapest: **{best['store']}** – **${best['price']:.2f}**")
-
-# ----------------- NEJM Tab -----------------
-with tab_nejm:
+# ---------- Maps tab ----------
+with tab_m:
     with card():
-        st.header("NEJM Diabetes Highlights (2023‑25)")
-        articles = [
-            ("Automated Insulin Delivery in T2D (2025)", "Closed‑loop pumps increased Time‑in‑Range by 15 percentage points vs standard care."),
-            ("Weekly Basal Insulin Trial (2024)", "Once‑weekly efsitora provided HbA1c control comparable to daily degludec."),
-            ("Intensive SBP Target in T2D (2024)", "Aiming for SBP <120 mm Hg lowered cardiovascular events without excess renal harm."),
-            ("Semaglutide Adjunct in Early T1D (2023)", "Adjunct semaglutide reduced exogenous insulin needs shortly after diagnosis."),
-            ("Tirzepatide in Obesity (2025)", "Dual GIP/GLP‑1 agonist led to greater weight loss and delayed progression to diabetes."),
-        ]
-        for title, takeaway in articles:
-            with st.expander(title):
-                st.write(takeaway)
+        st.header("Dallas CVS Locations")
+        if maps_key == "YOUR_API_KEY":
+            st.warning("Add GOOGLE_STATIC_KEY to Secrets for map images.")
+        for _,row in df_prices[['store','lat','lon']].drop_duplicates().iterrows():
+            url = ("https://maps.googleapis.com/maps/api/staticmap"
+                   f"?center={row.lat},{row.lon}&zoom=15&size=600x300"
+                   f"&markers=color:red%7C{row.lat},{row.lon}&key={maps_key}")
+            st.image(url, caption=row['store'])
 
-# ----------------- Footer -----------------
-st.caption("© 2025 – Demo app for educational use only; prices and advice are illustrative.")
+# ---------- Insulin guide ----------
+with tab_i:
+    with card():
+        st.header("Insulin Categories & Examples")
+        data = {
+            "Category":["Long‑acting","Rapid‑acting","Ultra‑rapid"],
+            "Brand":["Lantus (glargine)","Humalog (lispro)","Fiasp (aspart)"],
+            "Onset":["1‑2 h","15 min","5 min"],
+            "Duration":["24 h","4‑6 h","3‑4 h"]
+        }
+        st.table(pd.DataFrame(data))
+
+# ---------- NEJM tab ----------
+with tab_n:
+    with card():
+        st.header("NEJM Highlights")
+        for title, blurb in [
+            ("Automated Insulin Delivery 2025","Closed‑loop pumps ↑ Time‑in‑Range by 15 pp."),
+            ("Weekly Basal Insulin 2024","Once‑weekly efsitora matched daily degludec.")
+        ]:
+            with st.expander(title):
+                st.write(blurb)
+
+st.caption("© 2025 – Demo app. Static Maps images require Google API key.")
